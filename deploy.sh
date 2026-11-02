@@ -3,12 +3,49 @@ set -e
 
 echo "start REPEATER"
 
+# === НАСТРОЙКА РЕПОЗИТОРИЯ GITHUB ===
+# Укажите здесь ваш репозиторий в формате: "владелец/название"
+GH_REPO="/Managarovv/repeater" 
+
+# 0. Определение архитектуры и скачивание бинарника
+echo "[*] Проверка архитектуры системы..."
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)  ARCH_SUFFIX="amd64" ;;
+    aarch64) ARCH_SUFFIX="arm64" ;;
+    *) echo "[-] Неподдерживаемая архитектура: $ARCH"; exit 1 ;;
+esac
+echo "[+] Обнаружена архитектура: $ARCH (ищем релиз с суффиксом *$ARCH_SUFFIX*)"
+
+# Установка curl, если его нет
+if ! command -v curl &> /dev/null; then
+    echo "[*] Установка curl..."
+    sudo apt-get update && sudo apt-get install -y curl
+fi
+
+echo "[*] Получение ссылки на последний релиз с GitHub..."
+# Получаем URL для скачивания файла, содержащего нужный архитектурный суффикс
+DOWNLOAD_URL=$(curl -s https://github.com{GH_REPO}/releases/latest \
+    | grep -oP '"browser_download_url": "\K[^"]*' \
+
+    | grep -i "$ARCH_SUFFIX" | head -n 1)
+
+if [ -z "$DOWNLOAD_URL" ]; then
+    echo "[-] Ошибка: Не удалось найти бинарник для архитектуры $ARCH_SUFFIX в релизах GitHub."
+    exit 1
+fi
+
+echo "[*] Скачивание бинарного файла..."
+curl -L -o repeater "$DOWNLOAD_URL"
+echo "[+] Файл repeater успешно скачан."
+
 # 1. Интерактивный запрос данных
 echo "[*] Настройка конфигурации:"
 read -p "Входной порт прослушивания (по умолчанию :443): " LISTEN_ADDR
 LISTEN_ADDR=${LISTEN_ADDR:-:443}
 
 read -p "Введите SNI домен для VPN (например, amd.com): " VPN_SNI
+
 read -p "Введите удаленный IP:порт для VPN (например, 89.125.248.50:443): " VPN_TARGET_ADDR
 
 read -p "Введите локальный адрес назначения (по умолчанию 127.0.0.1:8443): " LOCAL_TARGET_ADDR
